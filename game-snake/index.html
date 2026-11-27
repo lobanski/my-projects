@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Змейка</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <h1>🐍 Змейка</h1>
+        
+        <div id="score-board">
+            <div class="score-item">
+                <span>Счёт:</span>
+                <span id="current-score" class="score-value">0</span>
+            </div>
+            <div class="score-item">
+                <span>Рекорд:</span>
+                <span id="high-score" class="score-value">0</span>
+            </div>
+        </div>
+
+        <canvas id="game-canvas" width="400" height="400"></canvas>
+
+        <div class="controls">
+            <button id="start-btn">Старт</button>
+            <button id="restart-btn" disabled>Заново</button>
+        </div>
+
+        <div id="mobile-controls" class="mobile-only">
+            <button class="d-pad-btn" data-dir="up">▲</button>
+            <button class="d-pad-btn" data-dir="left">◀</button>
+            <button class="d-pad-btn" data-dir="down">▼</button>
+            <button class="d-pad-btn" data-dir="right">▶</button>
+        </div>
+
+        <div id="game-over-screen" class="hidden">
+            <h2>Игра окончена!</h2>
+            <p class="final-score">Ваш счёт: <span id="final-score-display">0</span></p>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
