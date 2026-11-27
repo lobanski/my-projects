@@ -1,245 +1,307 @@
-// Z-Snake Game - HTML5 Snake Game
-class SnakeGame {
-    constructor() {
-        this.canvas = document.getElementById('game-canvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.gridSize = 20;
-        this.tileCount = this.canvas.width / this.gridSize;
-        
-        this.snake = [];
-        this.food = {};
-        this.direction = 'right';
-        this.nextDirection = 'right';
-        this.score = 0;
-        this.highScore = parseInt(localStorage.getItem('snakeHighScore')) || 0;
-        this.gameLoop = null;
-        this.gameSpeed = 150;
-        this.isPlaying = false;
-        
-        this.init();
-    }
+// 🐍 Змейка - Игровая логика
+(function() {
+    'use strict';
 
-    init() {
-        // Event listeners for keyboard input
-        document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+    // Настройки игры
+    const CELL_SIZE = 20;
+    const GRID = 20; // 400 / 20 = 20 клеток по ширине/высоте
+    const INITIAL_SPEED = 150;
+    const MIN_SPEED = 50;
+    const SPEED_DECREMENT = 2;
+
+    // DOM элементы
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('start-btn');
+    const restartBtn = document.getElementById('restart-btn');
+    const scoreEl = document.getElementById('current-score');
+    const highScoreEl = document.getElementById('high-score');
+    const finalScoreEl = document.getElementById('final-score-display');
+    const gameOverScreen = document.getElementById('game-over-screen');
+
+    // Игровое состояние
+    let snake = [];
+    let food = { x: 0, y: 0 };
+    let direction = { x: 0, y: 0 };
+    let nextDirection = { x: 0, y: 0 };
+    let score = 0;
+    let highScore = localStorage.getItem('snakeHighScore') || 0;
+    let gameRunning = false;
+    let gameLoop = null;
+    let speed = INITIAL_SPEED;
+
+    // Инициализация
+    function init() {
+        highScoreEl.textContent = highScore;
         
-        // Button handlers
-        document.getElementById('start-btn').addEventListener('click', () => this.startGame());
-        document.getElementById('restart-btn').addEventListener('click', () => this.resetGame());
+        // Обработчики событий
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', restartGame);
         
-        // Mobile controls
+        document.addEventListener('keydown', handleKeyPress);
+        
+        // Мобильные кнопки
         document.querySelectorAll('.d-pad-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const dir = e.currentTarget.dataset.dir;
-                this.changeDirection(dir);
-            });
-            
-            // Touch events for better mobile support
             btn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                const dir = e.currentTarget.dataset.dir;
-                this.changeDirection(dir);
+                handleMobileButton(btn.dataset.dir);
+            });
+            btn.addEventListener('mousedown', (e) => {
+                handleMobileButton(btn.dataset.dir);
             });
         });
-
-        // Update high score display
-        document.getElementById('high-score').textContent = this.highScore;
     }
 
-    handleKeyPress(e) {
+    function handleMobileButton(dir) {
+        const moves = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+        const move = moves[dir];
+        if (move) {
+            changeDirection(move.x, move.y);
+        }
+    }
+
+    function handleKeyPress(e) {
+        if (!gameRunning) return;
+        
         const keyMap = {
-            'ArrowUp': 'up', 'w': 'up', 'W': 'up',
-            'ArrowDown': 'down', 's': 'down', 'S': 'down',
-            'ArrowLeft': 'left', 'a': 'left', 'A': 'left',
-            'ArrowRight': 'right', 'd': 'right', 'D': 'right'
+            'ArrowUp': { x: 0, y: -1 }, 'W': { x: 0, y: -1 },
+            'ArrowDown': { x: 0, y: 1 }, 'S': { x: 0, y: 1 },
+            'ArrowLeft': { x: -1, y: 0 }, 'A': { x: -1, y: 0 },
+            'ArrowRight': { x: 1, y: 0 }, 'D': { x: 1, y: 0 }
         };
-
-        const direction = keyMap[e.key] || keyMap[e.code];
-        if (direction) {
-            e.preventDefault();
-            this.changeDirection(direction);
-        }
-    }
-
-    changeDirection(newDir) {
-        const opposites = { up: 'down', down: 'up', left: 'right', right: 'left' };
-        const currentDir = this.direction === 'up' ? 'ArrowUp' : 
-                          this.direction === 'down' ? 'ArrowDown' :
-                          this.direction === 'left' ? 'ArrowLeft' : 'ArrowRight';
-
-        if (opposites[newDir] !== this.nextDirection) {
-            this.nextDirection = newDir;
-            this.direction = newDir;
-        }
-    }
-
-    startGame() {
-        if (this.isPlaying) return;
         
-        // Reset game state
-        this.snake = [
-            {x: 10, y: 10},
-            {x: 9, y: 10},
-            {x: 8, y: 10}
+        const move = keyMap[e.key] || keyMap[e.key.toUpperCase()];
+        if (move) {
+            changeDirection(move.x, move.y);
+        }
+    }
+
+    function changeDirection(x, y) {
+        // Запоминаем следующее направление
+        const validMoves = [
+            { x: 0, y: -1 }, { x: 0, y: 1 },     // вверх/вниз
+            { x: -1, y: 0 }, { x: 1, y: 0 }       // влево/вправо
         ];
-        this.direction = 'right';
-        this.nextDirection = 'right';
-        this.score = 0;
-        this.gameSpeed = 150;
-        this.isPlaying = true;
         
-        this.updateScore();
-        document.getElementById('start-btn').disabled = true;
-        document.getElementById('restart-btn').disabled = false;
-        document.getElementById('game-over-screen').classList.add('hidden');
-
-        this.placeFood();
-        this.gameLoop = setInterval(() => this.update(), this.gameSpeed);
-    }
-
-    resetGame() {
-        clearInterval(this.gameLoop);
-        this.startGame();
-    }
-
-    updateScore() {
-        document.getElementById('current-score').textContent = this.score;
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
-            localStorage.setItem('snakeHighScore', this.highScore);
-            document.getElementById('high-score').textContent = this.highScore;
-        }
-    }
-
-    placeFood() {
-        const positions = [];
-        for (let x = 0; x < this.tileCount; x++) {
-            for (let y = 0; y < this.tileCount; y++) {
-                positions.push({x, y});
+        const isValid = validMoves.some(m => m.x === x && m.y === y);
+        if (isValid) {
+            // Нельзя пойти в противоположную сторону
+            if (direction.x !== -x || direction.y !== -y) {
+                nextDirection = { x, y };
             }
         }
-
-        // Remove snake positions
-        this.snake.forEach(seg => {
-            const idx = positions.findIndex(p => p.x === seg.x && p.y === seg.y);
-            if (idx !== -1) positions.splice(idx, 1);
-        });
-
-        if (positions.length > 0) {
-            const randomPos = positions[Math.floor(Math.random() * positions.length)];
-            this.food = {x: randomPos.x, y: randomPos.y};
-        }
     }
 
-    update() {
-        // Update direction
-        this.direction = this.nextDirection;
+    function startGame() {
+        resetGame();
+        gameRunning = true;
+        startBtn.disabled = true;
+        restartBtn.disabled = false;
+        gameLoop = setInterval(updateGame, speed);
+    }
 
-        // Calculate new head position
-        const head = {...this.snake[0]};
-        if (this.direction === 'up') head.y--;
-        else if (this.direction === 'down') head.y++;
-        else if (this.direction === 'left') head.x--;
-        else if (this.direction === 'right') head.x++;
+    function restartGame() {
+        stopGame();
+        resetGame();
+        gameRunning = true;
+        startBtn.disabled = true;
+        restartBtn.disabled = false;
+        gameLoop = setInterval(updateGame, speed);
+    }
 
-        // Check wall collision
-        if (head.x < 0 || head.x >= this.tileCount || head.y < 0 || head.y >= this.tileCount) {
-            this.gameOver();
+    function resetGame() {
+        // Начальная змейка (3 сегмента)
+        snake = [
+            { x: 10, y: 10 },
+            { x: 10, y: 11 },
+            { x: 10, y: 12 }
+        ];
+        direction = { x: 0, y: -1 }; // Начинаем движение вверх
+        nextDirection = { x: 0, y: -1 };
+        score = 0;
+        speed = INITIAL_SPEED;
+        scoreEl.textContent = score;
+        placeFood();
+        draw();
+    }
+
+    function stopGame() {
+        if (gameLoop) clearInterval(gameLoop);
+        gameLoop = null;
+    }
+
+    function updateGame() {
+        // Применяем следующее направление
+        direction = nextDirection;
+        
+        // Вычисляем новую голову
+        const head = { 
+            x: snake[0].x + direction.x, 
+            y: snake[0].y + direction.y 
+        };
+        
+        // Проверка столкновений
+        if (checkCollision(head)) {
+            gameOver();
             return;
         }
-
-        // Check self collision
-        for (let seg of this.snake) {
-            if (head.x === seg.x && head.y === seg.y) {
-                this.gameOver();
-                return;
+        
+        // Добавляем новую голову
+        snake.unshift(head);
+        
+        // Проверка еды
+        if (head.x === food.x && head.y === food.y) {
+            score += 10;
+            scoreEl.textContent = score;
+            
+            // Ускоряем игру
+            if (speed > MIN_SPEED) {
+                speed -= SPEED_DECREMENT;
+                clearInterval(gameLoop);
+                gameLoop = setInterval(updateGame, speed);
             }
-        }
-
-        // Move snake
-        this.snake.unshift(head);
-
-        // Check food collision
-        if (head.x === this.food.x && head.y === this.food.y) {
-            this.score += 10;
-            this.gameSpeed = Math.max(50, 150 - this.score / 2); // Increase speed
-            this.updateScore();
-            this.placeFood();
+            
+            placeFood();
         } else {
-            this.snake.pop();
+            // Удаляем хвост
+            snake.pop();
         }
-
-        this.draw();
+        
+        draw();
     }
 
-    draw() {
-        // Clear canvas
-        this.ctx.fillStyle = '#0a0a0a';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    function checkCollision(head) {
+        // Стены
+        if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) {
+            return true;
+        }
+        
+        // Самa змейка
+        for (let segment of snake) {
+            if (head.x === segment.x && head.y === segment.y) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
 
-        // Draw food
-        this.ctx.fillStyle = '#ff6b6b';
-        this.ctx.beginPath();
-        const foodX = this.food.x * this.gridSize + this.gridSize / 2;
-        const foodY = this.food.y * this.gridSize + this.gridSize / 2;
-        this.ctx.arc(foodX, foodY, this.gridSize / 2 - 2, 0, Math.PI * 2);
-        this.ctx.fill();
+    function placeFood() {
+        // Случайная позиция без змеи
+        let newFood;
+        do {
+            newFood = {
+                x: Math.floor(Math.random() * GRID),
+                y: Math.floor(Math.random() * GRID)
+            };
+        } while (checkCollision(newFood));
+        
+        food = newFood;
+    }
 
-        // Draw snake
-        this.snake.forEach((seg, idx) => {
-            const isHead = idx === 0;
-            this.ctx.fillStyle = isHead ? '#00f5d4' : '#00bbf9';
+    function gameOver() {
+        stopGame();
+        gameRunning = false;
+        
+        // Обновляем рекорд
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('snakeHighScore', highScore);
+            highScoreEl.textContent = highScore;
+        }
+        
+        finalScoreEl.textContent = score;
+        gameOverScreen.classList.remove('hidden');
+        startBtn.disabled = false;
+    }
+
+    function draw() {
+        // Очищаем canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Фон уже есть в CSS - не рисуем заново
+        
+        // Еда
+        const foodX = food.x * CELL_SIZE;
+        const foodY = food.y * CELL_SIZE;
+        
+        ctx.fillStyle = '#ff4757';
+        ctx.beginPath();
+        ctx.arc(foodX + CELL_SIZE/2, foodY + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Блеск еды
+        ctx.fillStyle = 'rgba(255, 71, 87, 0.7)';
+        ctx.beginPath();
+        ctx.arc(foodX + CELL_SIZE/3, foodY + CELL_SIZE/4, CELL_SIZE/6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Змейка
+        snake.forEach((segment, index) => {
+            const segX = segment.x * CELL_SIZE;
+            const segY = segment.y * CELL_SIZE;
             
-            this.ctx.fillRect(
-                seg.x * this.gridSize + 1,
-                seg.y * this.gridSize + 1,
-                this.gridSize - 2,
-                this.gridSize - 2
-            );
-
-            // Draw eyes on head
-            if (isHead) {
-                this.ctx.fillStyle = '#0a0a0a';
-                const eyeSize = this.gridSize / 5;
-                const offset = this.gridSize / 3;
-
-                // Position eyes based on direction
-                let eye1X, eye1Y, eye2X, eye2Y;
-                if (this.direction === 'up') {
-                    eye1X = seg.x * this.gridSize + offset; eye1Y = seg.y * this.gridSize + offset;
-                    eye2X = seg.x * this.gridSize + offset + 2*offset; eye2Y = seg.y * this.gridSize + offset;
-                } else if (this.direction === 'down') {
-                    eye1X = seg.x * this.gridSize + offset; eye1Y = seg.y * this.gridSize + this.gridSize - offset - eyeSize;
-                    eye2X = seg.x * this.gridSize + offset + 2*offset; eye2Y = seg.y * this.gridSize + this.gridSize - offset - eyeSize;
-                } else if (this.direction === 'left') {
-                    eye1X = seg.x * this.gridSize + offset; eye1Y = seg.y * this.gridSize + offset;
-                    eye2X = seg.x * this.gridSize + offset; eye2Y = seg.y * this.gridSize + offset + 2*offset;
-                } else { // right
-                    eye1X = seg.x * this.gridSize + this.gridSize - offset - eyeSize; eye1Y = seg.y * this.gridSize + offset;
-                    eye2X = seg.x * this.gridSize + this.gridSize - offset - eyeSize; eye2Y = seg.y * this.gridSize + offset + 2*offset;
-                }
-
-                this.ctx.beginPath();
-                this.ctx.arc(eye1X, eye1Y, eyeSize, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.beginPath();
-                this.ctx.arc(eye2X, eye2Y, eyeSize, 0, Math.PI * 2);
-                this.ctx.fill();
+            // Голова другого цвета
+            if (index === 0) {
+                ctx.fillStyle = '#00f5d4';
+            } else {
+                ctx.fillStyle = '#00bbf9';
+            }
+            
+            // Рисуем сегмент змеи с небольшим отступом
+            ctx.fillRect(segX + 1, segY + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            
+            // Глаза на голове
+            if (index === 0) {
+                drawEyes({ x: snake[0].x, y: snake[0].y });
             }
         });
     }
 
-    gameOver() {
-        clearInterval(this.gameLoop);
-        this.isPlaying = false;
-        document.getElementById('final-score-display').textContent = this.score;
-        document.getElementById('game-over-screen').classList.remove('hidden');
-        document.getElementById('start-btn').disabled = false;
+    function drawEyes(seg) {
+        const segX = seg.x * CELL_SIZE;
+        const segY = seg.y * CELL_SIZE;
+        
+        ctx.fillStyle = '#0a0a0a';
+        
+        // Вычисляем позицию глаз в зависимости от направления (абсолютные координаты относительно клетки сегмента)
+        const eyeSize = 3.5;
+        const eyeOffset = 6;
+        
+        let leftEyeX, leftEyeY, rightEyeX, rightEyeY;
+        
+        if (direction.x === 1) { // Вправо
+            leftEyeX = segX + CELL_SIZE - eyeOffset;
+            leftEyeY = segY + eyeOffset;
+            rightEyeX = segX + CELL_SIZE - eyeOffset;
+            rightEyeY = segY + CELL_SIZE - eyeOffset;
+        } else if (direction.x === -1) { // Влево
+            leftEyeX = segX + eyeOffset;
+            leftEyeY = segY + eyeOffset;
+            rightEyeX = segX + eyeOffset;
+            rightEyeY = segY + CELL_SIZE - eyeOffset;
+        } else if (direction.y === -1) { // Вверх
+            leftEyeX = segX + eyeOffset;
+            leftEyeY = segY + eyeOffset;
+            rightEyeX = segX + CELL_SIZE - eyeOffset;
+            rightEyeY = segY + eyeOffset;
+        } else { // Вниз или стоит
+            leftEyeX = segX + eyeOffset;
+            leftEyeY = segY + CELL_SIZE - eyeOffset;
+            rightEyeX = segX + CELL_SIZE - eyeOffset;
+            rightEyeY = segY + CELL_SIZE - eyeOffset;
+        }
+        
+        // Рисуем глаза (абсолютные координаты, без двойного смещения!)
+        ctx.beginPath();
+        ctx.arc(leftEyeX, leftEyeY, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.arc(rightEyeX, rightEyeY, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
     }
-}
 
-// Initialize game when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.game = new SnakeGame();
-});
+    // Запуск при загрузке
+    init();
+})();
